@@ -15,8 +15,8 @@ main = do
     BC.putStrLn "Logs from your program will appear here"
 
     -- Uncomment this block to pass first stage
-    -- let host = "127.0.0.1"
-    --     port = "4221"
+    let host = "127.0.0.1"
+    port = "4221"
     --
     -- BC.putStrLn $ "Listening on " <> BC.pack host <> ":" <> BC.pack port
     --

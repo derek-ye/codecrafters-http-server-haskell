@@ -33,5 +33,5 @@ main = do
         BC.putStrLn $ "Accepted connection from " <> BC.pack (show clientAddr) <> "."
         -- Handle the clientSocket as needed...
 
-        BC.putStrLn "HTTP/1.1 200 OK\r\n\r\n"
+        pure "HTTP/1.1 200 OK\r\n\r\n"
         close clientSocket

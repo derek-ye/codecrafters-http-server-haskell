@@ -31,6 +31,7 @@ main = do
     -- Accept connections and handle them forever
     forever $ do
         (clientSocket, clientAddr) <- accept serverSocket
+        print clientSocket
         BC.putStrLn $ "Accepted connection from " <> BC.pack (show clientAddr) <> "."
         -- Handle the clientSocket as needed...
 

@@ -6,7 +6,7 @@ import Control.Monad (forever)
 import qualified Data.ByteString.Char8 as BC
 import Network.Socket
 import System.IO (BufferMode (..), hSetBuffering, stdout)
-import Network.Socket.ByteString (send)
+import Network.Socket.ByteString (send, recv)
 
 main :: IO ()
 main = do
@@ -34,6 +34,26 @@ main = do
         print clientSocket
         BC.putStrLn $ "Accepted connection from " <> BC.pack (show clientAddr) <> "."
         -- Handle the clientSocket as needed...
+        path <- parseRequest <$> recv clientSocket 4096  -- max # of bytes that it's possible to read
+        print path
 
-        _ <- send clientSocket "HTTP/1.1 200 OK\r\n\r\n"
+        _ <- send clientSocket $ BC.pack $ getServerResponse path
         close clientSocket
+
+
+-- most basic parsing:
+-- break up a request by line number
+-- take the first line, break it up by whitespace -> array
+-- take second index of array from previous line
+parseRequest :: BC.ByteString -> String
+parseRequest unparsedReq = path
+    where
+        reqStr = BC.unpack unparsedReq
+        reqArr = lines reqStr
+        firstLineOfReq = head reqArr
+        path = words firstLineOfReq !! 1
+
+getServerResponse :: String -> String
+getServerResponse path = case path of
+    "/index.html" -> "HTTP/1.1 200 OK\r\n\r\n"
+    _ -> "HTTP/1.1 404 Not Found\r\n\r\n"

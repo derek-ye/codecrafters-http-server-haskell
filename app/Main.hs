@@ -25,6 +25,7 @@ main = do
     addrInfo <- getAddrInfo Nothing (Just host) (Just port)
 
     serverSocket <- socket (addrFamily $ head addrInfo) Stream defaultProtocol
+    setSocketOption serverSocket ReuseAddr 1
     bind serverSocket $ addrAddress $ head addrInfo
     listen serverSocket 5
 
@@ -54,6 +55,9 @@ parseRequest unparsedReq = path
         path = words firstLineOfReq !! 1
 
 getServerResponse :: String -> String
-getServerResponse path = case path of
-    "/index.html" -> "HTTP/1.1 200 OK\r\n\r\n"
-    _ -> "HTTP/1.1 404 Not Found\r\n\r\n"
+getServerResponse path
+    | path `elem` validPaths = "HTTP/1.1 200 OK\r\n\r\n"
+    | otherwise = "HTTP/1.1 404 Not Found\r\n\r\n"
+
+validPaths :: [String]
+validPaths = ["/", "/index.html"]

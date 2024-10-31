@@ -7,6 +7,7 @@ import qualified Data.ByteString.Char8 as BC
 import Network.Socket
 import System.IO (BufferMode (..), hSetBuffering, stdout)
 import Network.Socket.ByteString (send, recv)
+import Text.Printf
 
 main :: IO ()
 main = do
@@ -37,8 +38,8 @@ main = do
         -- Handle the clientSocket as needed...
         path <- parseRequest <$> recv clientSocket 4096  -- max # of bytes that it's possible to read
         print path
-
-        _ <- send clientSocket $ BC.pack $ getServerResponse path
+        print $ split path
+        _ <- send clientSocket $ BC.pack $ responseToString $ getServerResponse $ MkPath path
         close clientSocket
 
 
@@ -54,10 +55,81 @@ parseRequest unparsedReq = path
         firstLineOfReq = head reqArr
         path = words firstLineOfReq !! 1
 
-getServerResponse :: String -> String
-getServerResponse path
-    | path `elem` validPaths = "HTTP/1.1 200 OK\r\n\r\n"
-    | otherwise = "HTTP/1.1 404 Not Found\r\n\r\n"
+data HttpRequestHeaders = HttpRequestHeaders {
+    host :: String,
+    userAgent :: String,
+    acceptedMedia :: String
+} deriving (Show)
 
-validPaths :: [String]
-validPaths = ["/", "/index.html"]
+data HttpResponseHeaders = MkHttpResponseHeaders {
+    contentType :: String,
+    contentLength :: String
+} deriving (Show)
+
+data HttpRequest = MkHttpRequest {
+    method :: String,
+    version :: String,
+    target :: String,
+    reqheaders :: HttpRequestHeaders,
+    requestBody :: String
+} deriving (Show)
+data HttpResponse = MkHttpResponse { 
+    status :: String,
+    respHeaders :: HttpResponseHeaders,
+    responseBody :: String
+    }
+    deriving (Show)
+
+
+newtype Path = MkPath String
+
+getServerResponse :: Path -> HttpResponse
+getServerResponse = validPaths
+
+response200 :: String -> Int -> HttpResponse
+response200 s cl = MkHttpResponse { 
+    status="HTTP/1.1 200 OK",
+    respHeaders=MkHttpResponseHeaders {
+        contentType="Content-Type: text/plain",
+        contentLength=printf "Content-Length: %d" cl
+        },
+    responseBody=s
+    }
+
+response404 :: HttpResponse
+-- response404 = MkHttpResponseRaw "HTTP/1.1 404 Not Found\r\n\r\n"
+response404 = MkHttpResponse { 
+    status="HTTP/1.1 404 Not Found",
+    respHeaders=MkHttpResponseHeaders {
+        contentType="",
+        contentLength=""
+        },
+    responseBody=""
+    }
+
+validPaths :: Path -> HttpResponse
+validPaths (MkPath s)
+    | (length pathArr == 2) && (head pathArr == "") && (pathArr !! 1 == "") = response200 "" 0
+    | (length pathArr == 2) && (pathArr !! 1 == "index.html") = response200 "" 0
+    | (length pathArr == 3) && (pathArr !! 1 == "echo") = echoHandler pathArr
+    | otherwise = response404
+    where
+        pathArr = split s
+        
+echoHandler :: [String] -> HttpResponse
+echoHandler pathArr = response200 strToEcho (length strToEcho)
+    where
+        strToEcho = pathArr !! 2    -- given the path /echo/abc we want to echo 'abc'
+
+-- pathToString :: Path -> String
+-- pathToString (MkPath p) = intercalate "/" p
+
+responseToString :: HttpResponse -> String
+responseToString resp = printf "%s\r\n%s\r\n%s\r\n\r\n%s\r\n" (status resp) (contentType $ respHeaders resp) (contentLength $ respHeaders resp) (responseBody resp)
+
+-- from SO https://stackoverflow.com/questions/46580924/haskell-splitting-a-string-by-delimiter
+split :: String -> [String]
+split [] = [""]
+split (c:cs) | c == '/'  = "" : rest
+             | otherwise = (c : head rest) : tail rest
+    where rest = split cs

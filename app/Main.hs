@@ -52,8 +52,10 @@ parseRequest unparsedReq = path
     where
         reqStr = BC.unpack unparsedReq
         reqArr = lines reqStr
-        firstLineOfReq = head reqArr
-        path = words firstLineOfReq !! 1
+        firstLineOfReq = fromMaybe [] (safeHead reqArr)
+        path = case words firstLineOfReq of
+            (_: x: _) -> x      -- take the second value
+            _ -> "/"            -- all other cases go to the root
 
 data HttpRequestHeaders = HttpRequestHeaders {
     host :: String,
@@ -133,3 +135,13 @@ split [] = [""]
 split (c:cs) | c == '/'  = "" : rest
              | otherwise = (c : head rest) : tail rest
     where rest = split cs
+
+-- https://hoogle.internal.mercury.com/file/nix/store/vjldr9zzxh8i22gzr8v9pzild1v5qv1j-ghc-9.6.3-doc/share/doc/ghc/html/libraries/Cabal-syntax-3.10.1.0/src/Distribution.Utils.Generic.html#safeHead
+safeHead :: [a] -> Maybe a
+safeHead []    = Nothing
+safeHead (x:_) = Just x
+
+-- https://hoogle.internal.mercury.com/file/nix/store/vjldr9zzxh8i22gzr8v9pzild1v5qv1j-ghc-9.6.3-doc/share/doc/ghc/html/libraries/ghc-9.6.3/GHC-Data-Strict.html#v:fromMaybe
+fromMaybe :: a -> Maybe a -> a
+fromMaybe d Nothing = d
+fromMaybe _ (Just x) = x

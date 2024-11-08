@@ -47,15 +47,16 @@ main = do
 -- break up a request by line number
 -- take the first line, break it up by whitespace -> array
 -- take second index of array from previous line
-parseRequest :: BC.ByteString -> String
+-- if its a valid request, return Just + the path, otherwise Nothing
+parseRequest :: BC.ByteString -> Maybe String
 parseRequest unparsedReq = path
     where
         reqStr = BC.unpack unparsedReq
         reqArr = lines reqStr
         firstLineOfReq = fromMaybe [] (safeHead reqArr)
         path = case words firstLineOfReq of
-            (_: x: _) -> x      -- take the second value
-            _ -> "/"            -- all other cases go to the root
+            (_: x: _) -> Just x         -- take the second value
+            _ -> Nothing                -- all other cases go to the root
 
 data HttpRequestHeaders = HttpRequestHeaders {
     host :: String,

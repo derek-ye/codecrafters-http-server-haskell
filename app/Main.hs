@@ -36,9 +36,8 @@ main = do
         print clientSocket
         BC.putStrLn $ "Accepted connection from " <> BC.pack (show clientAddr) <> "."
         -- Handle the clientSocket as needed...
-        path <- parseRequest <$> recv clientSocket 4096  -- max # of bytes that it's possible to read
-        print path
-        print $ split path
+        Just path <- parseRequest <$> recv clientSocket 4096  -- max # of bytes that it's possible to read
+        
         _ <- send clientSocket $ BC.pack $ responseToString $ getServerResponse $ MkPath path
         close clientSocket
 

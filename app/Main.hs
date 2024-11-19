@@ -49,14 +49,19 @@ main = do
 -- take second index of array from previous line
 -- if its a valid request, return Just + the path, otherwise Nothing
 parseRequest :: BC.ByteString -> Maybe String
-parseRequest unparsedReq = path
-    where
-        reqStr = BC.unpack unparsedReq
-        reqArr = lines reqStr
-        firstLineOfReq = fromMaybe [] (safeHead reqArr)
-        path = case words firstLineOfReq of
-            (_: x: _) -> Just x         -- take the second value
-            _ -> Nothing                -- all other cases go to the root
+-- parseRequest unparsedReq = path
+--     where
+--         reqStr = BC.unpack unparsedReq
+--         reqArr = lines reqStr
+--         firstLineOfReq = fromMaybe [] (safeHead reqArr)
+--         path = case words firstLineOfReq of
+--             (_: x: _) -> Just x         -- take the second value
+--             _ -> Nothing                -- all other cases go to the root
+parseRequest unparsedReq = do
+    firstLineOfReq <- safeHead $ lines $ BC.unpack unparsedReq      -- what happens 
+    case words firstLineOfReq of 
+        (_: path: _) -> Just path
+        _ -> Nothing
 
 data HttpRequestHeaders = HttpRequestHeaders {
     host :: String,

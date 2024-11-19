@@ -48,6 +48,7 @@ main = do
 -- take second index of array from previous line
 -- if its a valid request, return Just + the path, otherwise Nothing
 parseRequest :: BC.ByteString -> Maybe String
+-- version 1: safe, doesn't use `do`
 -- parseRequest unparsedReq = path
 --     where
 --         reqStr = BC.unpack unparsedReq
@@ -56,11 +57,20 @@ parseRequest :: BC.ByteString -> Maybe String
 --         path = case words firstLineOfReq of
 --             (_: x: _) -> Just x         -- take the second value
 --             _ -> Nothing                -- all other cases go to the root
+--
+-- version 2: uses do
+-- parseRequest unparsedReq = do
+--     firstLineOfReq <- safeHead $ lines $ BC.unpack unparsedReq      -- what happens 
+--     case words firstLineOfReq of 
+--         (_: path: _) -> Just path
+--         _ -> Nothing
+--
+-- version 3: uses bind
 parseRequest unparsedReq = do
-    firstLineOfReq <- safeHead $ lines $ BC.unpack unparsedReq      -- what happens 
-    case words firstLineOfReq of 
-        (_: path: _) -> Just path
-        _ -> Nothing
+     safeHead (lines $ BC.unpack unparsedReq) >>= \firstLineOfReq ->
+        case words firstLineOfReq of 
+            (_: path: _) -> Just path
+            _ -> Nothing
 
 data HttpRequestHeaders = HttpRequestHeaders {
     host :: String,
@@ -115,18 +125,16 @@ response404 = MkHttpResponse {
     }
 
 validPaths :: Path -> HttpResponse
-validPaths (MkPath s)
-    | (length pathArr == 2) && (head pathArr == "") && (pathArr !! 1 == "") = response200 "" 0
-    | (length pathArr == 2) && (pathArr !! 1 == "index.html") = response200 "" 0
-    | (length pathArr == 3) && (pathArr !! 1 == "echo") = echoHandler pathArr
-    | otherwise = response404
+validPaths (MkPath s) = case pathArr of
+    ["", ""] -> response200 "" 0
+    ["", "index.html"] -> response200 "" 0
+    ["", "echo", strToEcho, []] -> echoHandler strToEcho    -- What about "/echo/abc/def" -> ["", "echo", "abc", "def"]
+    _ -> response404
     where
         pathArr = split s
         
-echoHandler :: [String] -> HttpResponse
-echoHandler pathArr = response200 strToEcho (length strToEcho)
-    where
-        strToEcho = pathArr !! 2    -- given the path /echo/abc we want to echo 'abc'
+echoHandler :: String -> HttpResponse
+echoHandler strToEcho = response200 strToEcho (length strToEcho)
 
 -- pathToString :: Path -> String
 -- pathToString (MkPath p) = intercalate "/" p

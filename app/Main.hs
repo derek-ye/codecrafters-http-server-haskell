@@ -129,6 +129,7 @@ validPaths (MkPath s) = case pathArr of
     ["", ""] -> response200 "" 0
     ["", "index.html"] -> response200 "" 0
     ["", "echo", strToEcho, []] -> echoHandler strToEcho    -- What about "/echo/abc/def" -> ["", "echo", "abc", "def"]
+    ["", "user-agent", uaStr] -> response200 uaStr $ length uaStr
     _ -> response404
     where
         pathArr = split s

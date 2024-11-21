@@ -8,6 +8,7 @@ import Network.Socket
 import System.IO (BufferMode (..), hSetBuffering, stdout)
 import Network.Socket.ByteString (send, recv)
 import Text.Printf
+import Debug.Trace
 
 main :: IO ()
 main = do
@@ -36,43 +37,55 @@ main = do
         print clientSocket
         BC.putStrLn $ "Accepted connection from " <> BC.pack (show clientAddr) <> "."
         -- Handle the clientSocket as needed...
-        Just path <- parseRequest <$> recv clientSocket 4096  -- max # of bytes that it's possible to read
+        Just parsedReq <- parseRequest <$> recv clientSocket 4096  -- max # of bytes that it's possible to read
         
-        _ <- send clientSocket $ BC.pack $ responseToString $ getServerResponse $ MkPath path
+        _ <- send clientSocket $ BC.pack $ responseToString $ getServerResponse parsedReq
         close clientSocket
 
 
--- most basic parsing:
--- break up a request by line number
--- take the first line, break it up by whitespace -> array
--- take second index of array from previous line
--- if its a valid request, return Just + the path, otherwise Nothing
-parseRequest :: BC.ByteString -> Maybe String
--- version 1: safe, doesn't use `do`
--- parseRequest unparsedReq = path
---     where
---         reqStr = BC.unpack unparsedReq
---         reqArr = lines reqStr
---         firstLineOfReq = fromMaybe [] (safeHead reqArr)
---         path = case words firstLineOfReq of
---             (_: x: _) -> Just x         -- take the second value
---             _ -> Nothing                -- all other cases go to the root
---
--- version 2: uses do
--- parseRequest unparsedReq = do
---     firstLineOfReq <- safeHead $ lines $ BC.unpack unparsedReq      -- what happens 
---     case words firstLineOfReq of 
---         (_: path: _) -> Just path
---         _ -> Nothing
---
--- version 3: uses bind
+parseRequest :: BC.ByteString -> Maybe HttpRequest
 parseRequest unparsedReq = do
-     safeHead (lines $ BC.unpack unparsedReq) >>= \firstLineOfReq ->
-        case words firstLineOfReq of 
-            (_: path: _) -> Just path
+    (m, t, v) <- maybeParsedRequestLine
+    parsedHeader <- unsafeParsedHeader
+    
+    parsedBody <- unsafeParsedBody
+    -- _ <- trace (show parsedBody) (Just ())
+   
+    pure MkHttpRequest {
+            method=m,
+            version=v,
+            targetPath=t,
+            reqheaders=parsedHeader,
+            requestBody=parsedBody
+        }
+    where
+        parseRequestLine :: String -> Maybe (String, String, String)
+        parseRequestLine reqLine = case words reqLine of
+            [method', targetPath', version'] -> Just (method', targetPath', version')
             _ -> Nothing
 
-data HttpRequestHeaders = HttpRequestHeaders {
+        parseHeaders :: String -> Maybe HttpRequestHeaders
+        parseHeaders headerLine = case words headerLine of
+            [_, host', _, userAgent', _, acceptedMedia'] -> Just MkHttpRequestHeaders {
+                host=host',
+                userAgent=userAgent',
+                acceptedMedia=acceptedMedia'
+            }
+            _ -> Nothing
+        
+        parseBody :: String -> Maybe String
+        parseBody bodyLine = Just bodyLine  -- always return the body string, even if it's the empty string
+        
+        reqArr = lines $ BC.unpack unparsedReq
+        maybeParsedRequestLine = case safeHead reqArr of
+            Just reqLine -> parseRequestLine reqLine
+            _ -> Nothing
+
+        -- i can't import safeIndex because of the CodeCrafters environment, so doing it unsafely here
+        unsafeParsedBody = parseBody $ reqArr !! 4       -- TODO: not safe...
+        unsafeParsedHeader = parseHeaders $ reqArr !! 1 <> reqArr !! 2 <> reqArr !! 3
+
+data HttpRequestHeaders = MkHttpRequestHeaders {
     host :: String,
     userAgent :: String,
     acceptedMedia :: String
@@ -85,8 +98,8 @@ data HttpResponseHeaders = MkHttpResponseHeaders {
 
 data HttpRequest = MkHttpRequest {
     method :: String,
+    targetPath :: String,
     version :: String,
-    target :: String,
     reqheaders :: HttpRequestHeaders,
     requestBody :: String
 } deriving (Show)
@@ -100,8 +113,12 @@ data HttpResponse = MkHttpResponse {
 
 newtype Path = MkPath String
 
-getServerResponse :: Path -> HttpResponse
-getServerResponse = validPaths
+getServerResponse :: HttpRequest -> HttpResponse
+getServerResponse req
+    | userAgentStr /= "" = response200 userAgentStr (length userAgentStr)
+    | otherwise = pathHandler (MkPath $ targetPath req)
+    where
+        userAgentStr = userAgent (reqheaders req)
 
 response200 :: String -> Int -> HttpResponse
 response200 s cl = MkHttpResponse { 
@@ -124,12 +141,11 @@ response404 = MkHttpResponse {
     responseBody=""
     }
 
-validPaths :: Path -> HttpResponse
-validPaths (MkPath s) = case pathArr of
+pathHandler :: Path -> HttpResponse
+pathHandler (MkPath s) = case pathArr of
     ["", ""] -> response200 "" 0
     ["", "index.html"] -> response200 "" 0
     ["", "echo", strToEcho, []] -> echoHandler strToEcho    -- What about "/echo/abc/def" -> ["", "echo", "abc", "def"]
-    ["", "user-agent", uaStr] -> response200 uaStr $ length uaStr
     _ -> response404
     where
         pathArr = split s
